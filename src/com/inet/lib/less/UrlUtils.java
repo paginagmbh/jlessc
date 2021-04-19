@@ -1,7 +1,7 @@
 /**
  * MIT License (MIT)
  *
- * Copyright (c) 2014 - 2019 Volker Berlin
+ * Copyright (c) 2014 - 2020 Volker Berlin
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -30,6 +30,7 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.lang.reflect.Method;
+import java.net.MalformedURLException;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
@@ -109,10 +110,10 @@ class UrlUtils {
             double position;
             if( param.getClass() == Operation.class && ((Operation)param).getOperator() == ' ' ) {
                 ArrayList<Expression> operands = ((Operation)param).getOperands();
-                color = getColor( operands.get( 0 ), formatter );
+                color = ColorUtils.getColor( operands.get( 0 ), formatter );
                 position = ColorUtils.getPercent( operands.get( 1 ), formatter );
             } else {
-                color = getColor( param, formatter );
+                color = ColorUtils.getColor( param, formatter );
                 position = (i - 1) / (parameters.size() - 2.0);
             }
             builder.append( "<stop offset=\"" );
@@ -143,67 +144,81 @@ class UrlUtils {
     }
 
     /**
-     * Get the color value of the expression or fire an exception if not a color.
-     * 
-     * @param param the expression to evaluate
-     * @param formatter current formatter
-     * @return the color value of the expression
-     * @throws LessException if the expression is not a color value
-     */
-    static double getColor( Expression param, CssFormatter formatter ) throws LessException {
-        switch( param.getDataType( formatter ) ) {
-            case Expression.COLOR:
-            case Expression.RGBA:
-                return param.doubleValue( formatter );
-        }
-        throw new LessException( "Not a color: " + param );
-    }
-
-    /**
      * Implementation of the function data-uri.
      * 
-     * @param formatter current formatter
+     * @param formatter      current formatter
      * @param relativeUrlStr relative URL of the less script. Is used as base URL
-     * @param urlString the url parameter of the function
-     * @param type the mime type
+     * @param urlString      the url parameter of the function
+     * @param type           the mime type
      * @throws IOException If any I/O errors occur on reading the content
      */
     static void dataUri( CssFormatter formatter, String relativeUrlStr, final String urlString, String type ) throws IOException {
         String urlStr = removeQuote( urlString );
-        InputStream input;
+        InputStream input = null;
         try {
-            input = formatter.getReaderFactory().openStream( formatter.getBaseURL(), urlStr, relativeUrlStr );
-        } catch( Exception e ) {
-            boolean quote = urlString != urlStr;
-            String rewrittenUrl;
-            if( formatter.isRewriteUrl( urlStr ) ) {
-                URL relativeUrl = new URL( relativeUrlStr );
-                relativeUrl = new URL( relativeUrl, urlStr );
-                rewrittenUrl = relativeUrl.getPath();
-                rewrittenUrl = quote ? urlString.charAt( 0 ) + rewrittenUrl + urlString.charAt( 0 ) : rewrittenUrl;
-            } else {
-                rewrittenUrl = urlString;
+            try {
+                URL url = formatter.getBaseURL();
+                url = new URL( url, urlStr );
+                if( !formatter.isRewriteUrlOff() ) {
+                    input = formatter.getReaderFactory().openStream(new URL( formatter.getBaseURL(), relativeUrlStr ), urlStr, "" );
+                }
+                else {
+                	 input = formatter.getReaderFactory().openStream( formatter.getBaseURL(),  urlStr, relativeUrlStr );
+                }
+            } catch( Exception e ) {
+                // try to do the default without rewrite, also if is a root url, remove that to see if the file can be found right besides the base less file.
+                input = formatter.getReaderFactory().openStream( formatter.getBaseURL(),  urlStr.startsWith( "/" ) ? urlStr.substring( 1 ): urlStr, relativeUrlStr );
             }
+            ByteArrayOutputStream buffer = new ByteArrayOutputStream();
+
+            int count;
+            byte[] data = new byte[16384];
+
+            while( (count = input.read( data, 0, data.length )) > 0 ) {
+                buffer.write( data, 0, count );
+                if( buffer.size() >= 32 * 1024 )
+                    break;
+            }
+
+            byte[] bytes = buffer.toByteArray();
+
+            if( bytes.length >= 32 * 1024 ) {
+                String rewrittenUrl = getRewrittenUrl( formatter, relativeUrlStr, urlString, urlStr );
+                formatter.append( "url(" ).append( rewrittenUrl ).append( ')' );
+            } else {
+                dataUri( formatter, bytes, urlStr, type );
+            }
+        } catch( Exception e ) {
+            String rewrittenUrl = getRewrittenUrl( formatter, relativeUrlStr, urlString, urlStr );
             formatter.append( "url(" ).append( rewrittenUrl ).append( ')' );
             return;
+        } finally {
+            if( input != null )
+                input.close();
         }
-        ByteArrayOutputStream buffer = new ByteArrayOutputStream();
+    }
 
-        int count;
-        byte[] data = new byte[16384];
-
-        while( (count = input.read( data, 0, data.length )) > 0 ) {
-            buffer.write( data, 0, count );
-        }
-        input.close();
-
-        byte[] bytes = buffer.toByteArray();
-
-        if( bytes.length >= 32 * 1024 ) {
-            formatter.append( "url(" ).append( urlString ).append( ')' );
+    /**
+     * Create the rewritten URL
+     * @param formatter current formatter
+     * @param relativeUrlStr relative URL of the less script. Is used as base URL
+     * @param urlString the url parameter of the function
+     * @param urlStr the url parameter of the function
+     * @return the new URL
+     * @throws MalformedURLException if there any problems with the URL
+     */
+    private static String getRewrittenUrl( CssFormatter formatter, String relativeUrlStr, final String urlString, String urlStr ) throws MalformedURLException {
+        boolean quote = urlString != urlStr;
+        String rewrittenUrl;
+        if( formatter.isRewriteUrl( urlStr ) ) {
+            URL relativeUrl = new URL( relativeUrlStr );
+            relativeUrl = new URL( relativeUrl, urlStr );
+            rewrittenUrl = relativeUrl.getPath();
+            rewrittenUrl = quote ? urlString.charAt( 0 ) + rewrittenUrl + urlString.charAt( 0 ) : rewrittenUrl;
         } else {
-            dataUri( formatter, bytes, urlStr, type );
+            rewrittenUrl = urlString;
         }
+        return rewrittenUrl;
     }
 
     /**
@@ -226,6 +241,9 @@ class UrlUtils {
                 case "jpg":
                 case "jpeg":
                     type = "image/jpeg;base64";
+                    break;
+                case "webp":
+                    type = "image/webp;base64";
                     break;
                 default: 
                     type = "text/html";

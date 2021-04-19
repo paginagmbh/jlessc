@@ -1,7 +1,7 @@
 /**
  * MIT License (MIT)
  *
- * Copyright (c) 2014 - 2020 Volker Berlin
+ * Copyright (c) 2020 Volker Berlin
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -26,25 +26,22 @@
  */
 package com.inet.lib.less;
 
-/**
- * A HSL color value.
- */
-public class HSL {
+import java.util.List;
 
-    public double h, s, l, a;
+/**
+ * Interface to simple extends the less syntax with exotic functions without forking the JLessC project.
+ */
+public interface CustomLessFunction {
 
     /**
-     * Create a new color value.
-     * @param h hue value
-     * @param s saturation
-     * @param l lightness
-     * @param a alpha
+     * Append this custom function to formatter
+     * 
+     * @param formatter
+     *            current formatter
+     * @param parameters
+     *            the parameters.
+     * @throws Exception
+     *             if any error occur it can throw any exception
      */
-    public HSL( double h, double s, double l, double a ) {
-        this.h = h;
-        this.s = s;
-        this.l = l;
-        this.a = a;
-    }
-
+    public void appendTo( CssFormatter formatter, List<Expression> parameters ) throws Exception;
 }

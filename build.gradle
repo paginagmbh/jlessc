@@ -1,6 +1,8 @@
 buildscript {
     repositories {
-        jcenter()
+        maven {
+            url "https://plugins.gradle.org/m2/"
+        }
     }
     dependencies {
         classpath 'com.moowork.gradle:gradle-node-plugin:+'
@@ -12,12 +14,16 @@ apply plugin: 'com.moowork.node'
 apply plugin: 'java'
 
 repositories {
-	jcenter()
+    mavenCentral()
 }
 
 dependencies {
     compile		'com.google.code.findbugs:jsr305:3.0.0'
 	testCompile	'junit:junit:4.11'
+	def javaVersion = org.gradle.util.VersionNumber.parse( System.properties['java.version'] ).getMajor()
+    if( javaVersion >= 15 ) {
+        testRuntime 'org.mozilla:rhino:+'
+    }
 }
 
 sourceCompatibility = 1.7
@@ -90,7 +96,7 @@ apply plugin: 'signing'
 
 group = 'de.inetsoftware'
 archivesBaseName = 'jlessc'
-version = '1.8-SNAPSHOT'
+version = '1.10-SNAPSHOT'
 
 jar {
     manifest {

@@ -1,7 +1,7 @@
 /**
  * MIT License (MIT)
  *
- * Copyright (c) 2014 - 2019 Volker Berlin
+ * Copyright (c) 2014 - 2020 Volker Berlin
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -210,9 +210,6 @@ class FunctionExpression extends Expression {
                 case "svg-gradient":
                     UrlUtils.svgGradient( formatter, parameters );
                     return;
-                case "colorize-image":
-                    CustomFunctions.colorizeImage( formatter, parameters );
-                    return;
                 case "replace":
                     String str = get( 0 ).stringValue( formatter );
                     formatter.setInlineMode( true );
@@ -245,10 +242,13 @@ class FunctionExpression extends Expression {
                     if( formatter.isRewriteUrl( urlStr ) ) {
                         try {
                             String relativeUrlStr = get( 0 ).stringValue( formatter );
+                            boolean isRoot = relativeUrlStr.startsWith("/"); 
+                            if (!isRoot) relativeUrlStr = '/' + relativeUrlStr; // must start with root so it resolves .. fragments
                             URL relativeUrl = new URL( "file", null, relativeUrlStr );
                             relativeUrl = new URL( relativeUrl, urlStr );
                             boolean quote = url != urlStr;
                             urlStr = relativeUrl.getPath();
+                            if (!isRoot && urlStr.startsWith("/")) urlStr = urlStr.substring(1); // remove the root again if it didn't have it.
                             url = quote ? url.charAt( 0 ) + urlStr + url.charAt( 0 ) : urlStr;
                         } catch ( MalformedURLException ex ) {
                             // ignore, occur with data: protocol
@@ -288,6 +288,12 @@ class FunctionExpression extends Expression {
                 case "if":
                     get( get( 0 ).booleanValue( formatter ) ? 1 : 2 ).appendTo( formatter ); 
                     return;
+                default:
+                    CustomLessFunction customLessFunction = Less.CUSTOM_FUNKTIONS.get( super.toString() );
+                    if( customLessFunction != null ) {
+                        customLessFunction.appendTo( formatter, parameters );
+                        return;
+                    }
             }
             if( type == UNKNOWN ) {
                 eval( formatter );

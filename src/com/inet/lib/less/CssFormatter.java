@@ -1,7 +1,7 @@
 /**
  * MIT License (MIT)
  *
- * Copyright (c) 2014 - 2019 Volker Berlin
+ * Copyright (c) 2014 - 2020 Volker Berlin
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -26,6 +26,7 @@
  */
 package com.inet.lib.less;
 
+import java.net.URI;
 import java.net.URL;
 import java.text.DecimalFormat;
 import java.text.DecimalFormatSymbols;
@@ -44,7 +45,7 @@ import javax.annotation.Nullable;
 /**
  * A formatter for the CSS output. Hold some formating states.
  */
-class CssFormatter implements Cloneable {
+public class CssFormatter implements Cloneable {
 
     /**
      * The scope of a single stack element.
@@ -330,6 +331,9 @@ class CssFormatter implements Cloneable {
      * @param lessExtend the extend
      */
     void add( LessExtend lessExtend ) {
+        if( state.isReference ) {
+            return;
+        }
         lessExtends.add( lessExtend, this.currentOutput.getSelectors() );
     }
 
@@ -337,7 +341,7 @@ class CssFormatter implements Cloneable {
      * Get the URL of the top less file.
      * @return the URL
      */
-    URL getBaseURL() {
+    public URL getBaseURL() {
         return state.baseURL;
     }
 
@@ -346,17 +350,34 @@ class CssFormatter implements Cloneable {
      * 
      * @param url the URL that should be rewrite
      * @return true, if rewrite
+     * @see #parseRewriteUrl()
      */
     boolean isRewriteUrl( String url ) {
         switch( rewriteUrl ) {
             default:
-            case 0:
+            case 0: // off
                 return false;
-            case 1:
+            case 1: // local
                 return url.startsWith( "." );
-            case 2:
-                return !url.startsWith( "data:" ); // data: URL never rewrite
+            case 2: // all
+                if( url.startsWith( "/" ) ) {
+                    return false; // never rewrite root urls
+                }
+                try {
+                    return new URI( url ).getScheme() == null; // nver rewrite urls with a scheme (data, http, https)
+                } catch( Exception e ) {
+                    return false;
+                }
         }
+    }
+
+    /**
+     * if rewrite URL is off
+     * 
+     * @return true, is off
+     */
+    boolean isRewriteUrlOff() {
+        return rewriteUrl == 0;
     }
 
     /**
@@ -608,7 +629,7 @@ class CssFormatter implements Cloneable {
      * @param str the string
      * @return this
      */
-    CssFormatter append( String str ) {
+    public CssFormatter append( String str ) {
         if( inlineMode ) {
             str = UrlUtils.removeQuote( str );
         }
@@ -622,7 +643,7 @@ class CssFormatter implements Cloneable {
      * @param hint the original spelling of the color if not calculated
      * @return this
      */
-    CssFormatter appendColor( double color, @Nullable String hint ) {
+    public CssFormatter appendColor( double color, @Nullable String hint ) {
         if( !inlineMode && hint != null ) {
             output.append( hint );
         } else {
@@ -639,7 +660,7 @@ class CssFormatter implements Cloneable {
      * @param value the value
      * @param digits the digits to write.
      */
-    void appendHex( int value, int digits ) {
+    public void appendHex( int value, int digits ) {
         if( digits > 1 ) {
             appendHex( value >>> 4, digits-1 );
         }
@@ -652,7 +673,7 @@ class CssFormatter implements Cloneable {
      * @param ch the character
      * @return a reference to this object
      */
-    CssFormatter append( char ch ) {
+    public CssFormatter append( char ch ) {
         output.append( ch );
         return this;
     }
@@ -663,7 +684,7 @@ class CssFormatter implements Cloneable {
      * @param value the number
      * @return a reference to this object
      */
-    CssFormatter append( double value ) {
+    public CssFormatter append( double value ) {
         if( value == (int)value ) {
             output.append( Integer.toString( (int)value ) );
         } else {
@@ -679,7 +700,7 @@ class CssFormatter implements Cloneable {
      * @param unit the unit
      * @return a reference to this object
      */
-    CssFormatter appendValue( double value, String unit ) {
+    public CssFormatter appendValue( double value, String unit ) {
         append( value );
         append( unit );
         return this;
